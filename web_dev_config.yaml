@@ -1,0 +1,4 @@
+# Fixed port for `flutter run -d chrome` / web-server (default is random when omitted).
+server:
+  host: localhost
+  port: 8080
