@@ -6,9 +6,11 @@ import '../core/auth/employee_session.dart';
 import '../core/auth/saved_credentials_store.dart';
 import '../core/auth/session_store.dart';
 import '../core/updates/app_update_service.dart';
+import '../features/attendance/data/attendance_control_repository.dart';
 import '../features/attendance/data/attendance_repository.dart';
 import '../features/attendance/data/local_attendance_session_store.dart';
 import '../features/attendance/data/location_service.dart';
+import '../features/attendance/data/nfc_reader.dart';
 import '../features/attendance/data/pending_punch_store.dart';
 import '../features/attendance/domain/attendance_checkin_service.dart';
 import '../features/employee/data/employee_repository.dart';
@@ -56,6 +58,13 @@ final attendanceCheckInServiceProvider = Provider<AttendanceCheckInService>((ref
 final locationServiceProvider = Provider<LocationService>((ref) {
   return LocationService();
 });
+
+final attendanceControlRepositoryProvider =
+    Provider<AttendanceControlRepository>((ref) {
+  return AttendanceControlRepository(ref.watch(apiClientProvider));
+});
+
+final nfcReaderProvider = Provider<NfcReader>((ref) => const PlatformNfcReader());
 
 final employeeRepositoryProvider = Provider<EmployeeRepository>((ref) {
   return EmployeeRepository(ref.watch(apiClientProvider));

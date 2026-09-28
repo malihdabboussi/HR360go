@@ -10,6 +10,8 @@ class ApiEndpoints {
   static const checkIn = '/api/v2/mobile/attendance/Checkin';
   static const checkInStatus = '/api/v2/mobile/attendance/GetCheckinStatus';
   static const myAttendance = '/api/v2/mobile/attendance/getMyAttendance';
+  /// NFC / geofence rules resolved for the signed-in employee.
+  static const myAttendanceControl = '/api/v2/mobile/attendance-control/me';
   static const currentMonthPayroll = '/api/v2/payroll/myPeriodAttendanceSummary';
 
   static const myLeaveRequests = '/api/v2/leave_request/getEmployeeLeavesRequest';

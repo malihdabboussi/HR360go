@@ -62,6 +62,32 @@ Fields: `checkin_status` (bool), `checkin_time`, `checkout_time`
 
 Dates: `yyyy-mm-dd`
 
+## Attendance control (NFC / geofence)
+
+Admin configures rules in the web Client (Settings > Attendance Control). Full contract: `Client/docs/features/attendance-control.md`.
+
+### GET `/api/v2/mobile/attendance-control/me`
+
+Rules already resolved for the signed-in employee (active + assigned only):
+
+```json
+{
+  "nfc_required": true,
+  "geofence_required": true,
+  "nfc_cards": [{ "id": "c1", "name": "Main door", "serial": "04A1B2C3" }],
+  "geofences": [{ "id": "g1", "name": "Head office", "latitude": 36.8065, "longitude": 10.1815, "radius_m": 100 }]
+}
+```
+
+- Loaded after login, cached per tenant + employee (Hive box `attendance_control`), refreshed on pull-to-refresh and before each punch (5 s cap, then last known).
+- 404 = feature not on the Server yet, so no rules. Other errors fall back to cache.
+
+### Punch additions
+
+- `nfc_serial` (uppercase hex UID, separators stripped) on `Checkin` query and Plan B body, for **check-in and check-out**, when `nfc_required`.
+- App pre-checks the geofence with `distance <= radius_m + min(accuracy, 100)` and blocks with a hint when outside; Server must enforce the same rule.
+- Server rejection: 4xx `{ code, message }` with `NFC_REQUIRED` | `NFC_NOT_ASSIGNED` | `OUTSIDE_GEOFENCE` | `LOCATION_REQUIRED`; shown to the user, not retried.
+
 ## Poll after primary queue
 
 Initial delay 2.5s, then 5 attempts every 2s until status confirms punch.

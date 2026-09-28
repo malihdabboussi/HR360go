@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/auth/employee_session.dart';
+import '../features/attendance/domain/attendance_control.dart';
+import '../features/attendance/presentation/attendance_control_notifier.dart';
 import '../features/attendance/presentation/attendance_controller.dart';
 import 'providers.dart';
 
@@ -55,6 +57,15 @@ class _AuthenticatedScopeState extends ConsumerState<AuthenticatedScope> {
   }
 }
 
+final attendanceControlProvider = StateNotifierProvider<AttendanceControlNotifier,
+    AsyncValue<AttendanceControlConfig>>(
+  (ref) => AttendanceControlNotifier(
+    session: ref.watch(currentSessionProvider),
+    repository: ref.watch(attendanceControlRepositoryProvider),
+  ),
+  dependencies: [currentSessionProvider],
+);
+
 final scopedAttendanceControllerProvider =
     StateNotifierProvider<AttendanceController, AttendanceState>(
   (ref) {
@@ -65,7 +76,8 @@ final scopedAttendanceControllerProvider =
       localSessionStore: ref.watch(localAttendanceSessionStoreProvider),
       locationService: ref.watch(locationServiceProvider),
       checkInService: ref.watch(attendanceCheckInServiceProvider),
+      loadControlConfig: () => ref.read(attendanceControlProvider.notifier).forPunch(),
     );
   },
-  dependencies: [currentSessionProvider],
+  dependencies: [currentSessionProvider, attendanceControlProvider],
 );

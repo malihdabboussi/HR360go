@@ -11,10 +11,12 @@ import '../../../core/theme/app_decorations.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/updates/app_update_dialog.dart';
 import '../../../core/widgets/hr360_logo.dart';
+import '../domain/attendance_control.dart';
 import '../domain/location_availability.dart';
 import '../models/my_attendance_report.dart';
 import 'attendance_controller.dart';
 import 'widgets/attendance_widgets.dart';
+import 'widgets/nfc_scan_sheet.dart';
 
 class AttendanceHomeScreen extends ConsumerWidget {
   const AttendanceHomeScreen({super.key});
@@ -50,6 +52,64 @@ class AttendanceHomeScreen extends ConsumerWidget {
     );
   }
 
+  Future<void> _showPunchHint(
+    BuildContext context,
+    AttendanceController controller,
+    PunchHint hint,
+  ) async {
+    if (!context.mounted) return;
+    final settings = hint.locationSettings;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.info_outline, size: 32),
+        title: Text(hint.title),
+        content: Text(hint.message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+          if (settings != null && !settings.ok)
+            FilledButton(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                await controller.openLocationSettings(settings);
+              },
+              child: const Text('Open Settings'),
+            ),
+        ],
+      ),
+    );
+    controller.clearPunchHint();
+  }
+
+  /// Rules check + GPS, then NFC tap when required, then submit.
+  Future<void> _punch(BuildContext context, WidgetRef ref) async {
+    final controller = ref.read(scopedAttendanceControllerProvider.notifier);
+    final preparation = await controller.preparePunch();
+    if (preparation == null) return;
+
+    String? serial;
+    if (preparation.requiresNfc) {
+      if (!context.mounted) {
+        controller.cancelPunch();
+        return;
+      }
+      serial = await showNfcScanSheet(
+        context,
+        reader: ref.read(nfcReaderProvider),
+        isCheckingOut: preparation.isCheckingOut,
+        cards: preparation.nfcCards,
+      );
+      if (serial == null) {
+        controller.cancelPunch();
+        return;
+      }
+    }
+    await controller.submitPunch(preparation, nfcSerial: serial);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(currentSessionProvider);
@@ -59,6 +119,7 @@ class AttendanceHomeScreen extends ConsumerWidget {
     final report = state.weekReport;
     final today = report?.dayForDate(formatYyyyMmDd(DateTime.now()));
     final themeMode = ref.watch(themeModeProvider);
+    final control = ref.watch(attendanceControlProvider).valueOrNull;
 
     ref.listen<AttendanceState>(scopedAttendanceControllerProvider, (prev, next) {
       final prompt = next.locationPrompt;
@@ -67,8 +128,22 @@ class AttendanceHomeScreen extends ConsumerWidget {
       _showLocationPrompt(context, controller, prompt);
     });
 
+    ref.listen<AttendanceState>(scopedAttendanceControllerProvider, (prev, next) {
+      final hint = next.punchHint;
+      if (hint == null || identical(prev?.punchHint, hint)) return;
+      _showPunchHint(context, controller, hint);
+    });
+
     return RefreshIndicator(
-      onRefresh: controller.refresh,
+      onRefresh: () async {
+        await Future.wait([
+          controller.refresh(),
+          ref
+              .read(attendanceControlProvider.notifier)
+              .refresh()
+              .then((_) {}, onError: (_) {}),
+        ]);
+      },
       color: AppColors.primary,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
@@ -120,10 +195,11 @@ class AttendanceHomeScreen extends ConsumerWidget {
                         state.isAcquiringLocation ||
                         state.isSubmitting,
                     isAcquiringLocation: state.isAcquiringLocation,
+                    control: control,
                     onToggle: state.isCheckInInteractionBlocked ||
                             (!state.canToggleCheckIn && state.isOpenSession)
                         ? null
-                        : controller.toggleCheck,
+                        : () => _punch(context, ref),
                   ),
                   if (state.infoMessage != null) ...[
                     const SizedBox(height: 12),
@@ -414,6 +490,7 @@ class _HeroCard extends StatelessWidget {
     required this.roleAllowsCheckIn,
     required this.isLoading,
     required this.isAcquiringLocation,
+    required this.control,
     required this.onToggle,
   });
 
@@ -422,9 +499,13 @@ class _HeroCard extends StatelessWidget {
   final bool roleAllowsCheckIn;
   final bool isLoading;
   final bool isAcquiringLocation;
+  final AttendanceControlConfig? control;
   final VoidCallback? onToggle;
 
   String? get _blockedMessage {
+    if (state.isAwaitingNfc) {
+      return 'Waiting for you to tap your NFC card…';
+    }
     if (state.isSubmitting || state.isAcquiringLocation) {
       return 'Check-in is already in progress…';
     }
@@ -495,8 +576,13 @@ class _HeroCard extends StatelessWidget {
             roleAllowsCheckIn: roleAllowsCheckIn,
             isInteractionBlocked: interactionBlocked,
             blockedMessage: _blockedMessage,
+            showProgressSnack: control?.hasRules != true,
             onPressed: onToggle ?? () {},
           ),
+          if (control?.hasRules == true) ...[
+            const SizedBox(height: 12),
+            _PunchRequirements(control: control!, isCheckedIn: isIn),
+          ],
           const SizedBox(height: 14),
           _LocationRow(
             today: today,
@@ -504,6 +590,48 @@ class _HeroCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Tells the employee up front what the next punch will ask for.
+class _PunchRequirements extends StatelessWidget {
+  const _PunchRequirements({required this.control, required this.isCheckedIn});
+
+  final AttendanceControlConfig control;
+  final bool isCheckedIn;
+
+  @override
+  Widget build(BuildContext context) {
+    final action = isCheckedIn ? 'check out' : 'check in';
+    final names = control.geofences
+        .map((g) => g.name)
+        .where((n) => n.isNotEmpty)
+        .toList();
+    final where = names.isEmpty
+        ? 'your assigned location'
+        : names.length <= 2
+            ? names.join(' or ')
+            : '${names.take(2).join(', ')} +${names.length - 2}';
+
+    return Wrap(
+      alignment: WrapAlignment.center,
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        if (control.nfcRequired)
+          StatusPill(
+            label: 'Tap NFC card to $action',
+            color: AppColors.primary,
+            icon: Icons.contactless,
+          ),
+        if (control.geofenceRequired)
+          StatusPill(
+            label: 'Only at $where',
+            color: AppColors.secondary,
+            icon: Icons.fence,
+          ),
+      ],
     );
   }
 }

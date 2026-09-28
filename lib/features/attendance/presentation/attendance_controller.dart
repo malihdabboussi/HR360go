@@ -10,6 +10,7 @@ import '../data/pending_punch_store.dart';
 import '../domain/attendance_checkin_config.dart';
 import '../domain/attendance_checkin_poll.dart';
 import '../domain/attendance_checkin_service.dart';
+import '../domain/attendance_control.dart';
 import '../domain/attendance_pending_punch_confirm.dart';
 import '../domain/location_availability.dart';
 import '../domain/pending_attendance_punch.dart';
@@ -18,6 +19,37 @@ import '../../../core/permissions/attendance_user_error.dart';
 import '../models/check_in_geo.dart';
 import '../models/check_in_status.dart';
 import '../models/my_attendance_report.dart';
+
+/// Blocking explanation shown as a dialog when a punch cannot proceed.
+class PunchHint {
+  const PunchHint({
+    required this.title,
+    required this.message,
+    this.locationSettings,
+  });
+
+  final String title;
+  final String message;
+
+  /// When set, the dialog offers "Open Settings" for this location problem.
+  final LocationAvailability? locationSettings;
+}
+
+/// Result of [AttendanceController.preparePunch]: rules passed so far, and
+/// whether the screen must collect an NFC tap before [AttendanceController.submitPunch].
+class PunchPreparation {
+  const PunchPreparation({
+    required this.isCheckingOut,
+    required this.geo,
+    required this.requiresNfc,
+    required this.nfcCards,
+  });
+
+  final bool isCheckingOut;
+  final CheckInGeo? geo;
+  final bool requiresNfc;
+  final List<AttendanceNfcCard> nfcCards;
+}
 
 class AttendanceState {
   const AttendanceState({
@@ -37,6 +69,8 @@ class AttendanceState {
     this.weekReport,
     this.canToggleCheckIn = true,
     this.locationPrompt,
+    this.isAwaitingNfc = false,
+    this.punchHint,
   });
 
   final CheckInStatus? status;
@@ -56,12 +90,15 @@ class AttendanceState {
   final bool canToggleCheckIn;
   /// Non-null when punch proceeded without GPS and UI should offer Settings.
   final LocationAvailability? locationPrompt;
+  final bool isAwaitingNfc;
+  final PunchHint? punchHint;
 
   bool get isOpenSession => status?.isOpenSession ?? false;
 
   bool get isCheckInInteractionBlocked =>
       isSubmitting ||
       isAcquiringLocation ||
+      isAwaitingNfc ||
       hasPendingPunch ||
       isResolvingQueued;
 
@@ -82,9 +119,12 @@ class AttendanceState {
     MyAttendanceReport? weekReport,
     bool? canToggleCheckIn,
     LocationAvailability? locationPrompt,
+    bool? isAwaitingNfc,
+    PunchHint? punchHint,
     bool clearError = false,
     bool clearInfo = false,
     bool clearLocationPrompt = false,
+    bool clearPunchHint = false,
   }) =>
       AttendanceState(
         status: status ?? this.status,
@@ -106,6 +146,8 @@ class AttendanceState {
         locationPrompt: clearLocationPrompt
             ? null
             : (locationPrompt ?? this.locationPrompt),
+        isAwaitingNfc: isAwaitingNfc ?? this.isAwaitingNfc,
+        punchHint: clearPunchHint ? null : (punchHint ?? this.punchHint),
       );
 }
 
@@ -117,12 +159,14 @@ class AttendanceController extends StateNotifier<AttendanceState> {
     required LocalAttendanceSessionStore localSessionStore,
     required LocationService locationService,
     required AttendanceCheckInService checkInService,
+    required Future<AttendanceControlConfig> Function() loadControlConfig,
   })  : _session = session,
         _repository = repository,
         _pendingPunchStore = pendingPunchStore,
         _localSessionStore = localSessionStore,
         _locationService = locationService,
         _checkInService = checkInService,
+        _loadControlConfig = loadControlConfig,
         super(const AttendanceState()) {
     _startTimer();
     _syncPendingState();
@@ -135,6 +179,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
   final LocalAttendanceSessionStore _localSessionStore;
   final LocationService _locationService;
   final AttendanceCheckInService _checkInService;
+  final Future<AttendanceControlConfig> Function() _loadControlConfig;
 
   Timer? _ticker;
   DateTime? _checkinStart;
@@ -414,9 +459,10 @@ class AttendanceController extends StateNotifier<AttendanceState> {
         }
         _syncPendingState();
         state = state.copyWith(
-          error: outcome.retryable
-              ? 'Attendance failed — will retry when online'
-              : 'Check-in/out failed',
+          error: outcome.userMessage ??
+              (outcome.retryable
+                  ? 'Attendance failed — will retry when online'
+                  : 'Check-in/out failed'),
         );
     }
   }
@@ -502,14 +548,44 @@ class AttendanceController extends StateNotifier<AttendanceState> {
     clearLocationPrompt();
   }
 
-  Future<void> toggleCheck() async {
-    if (state.isCheckInInteractionBlocked) return;
-    if (!state.canToggleCheckIn && state.isOpenSession) return;
+  Future<void> openLocationSettings(LocationAvailability availability) async {
+    await _locationService.openSettingsFor(availability);
+  }
+
+  void clearPunchHint() {
+    state = state.copyWith(clearPunchHint: true);
+  }
+
+  Future<AttendanceControlConfig> _controlConfigOrNone() async {
+    try {
+      return await _loadControlConfig();
+    } catch (_) {
+      // No rules known (offline, never cached): Server still enforces.
+      return AttendanceControlConfig.none;
+    }
+  }
+
+  PunchPreparation? _block(PunchHint hint) {
+    state = state.copyWith(
+      isAcquiringLocation: false,
+      isAwaitingNfc: false,
+      punchHint: hint,
+      clearLocationPrompt: true,
+    );
+    return null;
+  }
+
+  /// First half of a punch: sync status, load rules, capture GPS, check the
+  /// geofence. Returns null (with [AttendanceState.punchHint] set) when blocked.
+  Future<PunchPreparation?> preparePunch() async {
+    if (state.isCheckInInteractionBlocked) return null;
+    if (!state.canToggleCheckIn && state.isOpenSession) return null;
 
     state = state.copyWith(
       clearError: true,
       clearInfo: true,
       clearLocationPrompt: true,
+      clearPunchHint: true,
       isAcquiringLocation: true,
     );
 
@@ -519,6 +595,8 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       _updateTimerFromStatus(status);
       state = state.copyWith(status: status);
     } catch (_) {}
+
+    final control = await _controlConfigOrNone();
 
     LocationAvailability? locationPrompt;
     CheckInGeo? geo;
@@ -539,25 +617,93 @@ class AttendanceController extends StateNotifier<AttendanceState> {
       locationPrompt ??= const LocationAvailability.blocked(
         LocationBlockReason.fixUnavailable,
       );
-    } finally {
-      state = state.copyWith(
-        isAcquiringLocation: false,
-        locationPrompt: locationPrompt,
-      );
     }
 
     final isCheckingOut = state.isOpenSession;
-    final checkinTime = DateTime.now().toUtc().toIso8601String();
-    final request = AttendanceCheckInRequest(
-      timeZone: _timeZone,
-      checkinTime: checkinTime,
-      geo: geo,
+    final action = isCheckingOut ? 'check out' : 'check in';
+
+    if (control.geofenceRequired) {
+      if (control.geofences.isEmpty) {
+        return _block(PunchHint(
+          title: 'No location assigned',
+          message:
+              'You can only $action from an assigned location, but none is assigned to you. Contact HR.',
+        ));
+      }
+      if (geo == null) {
+        return _block(PunchHint(
+          title: 'Location required',
+          message:
+              'Turn on location to $action. You must be at your assigned work location.',
+          locationSettings: locationPrompt,
+        ));
+      }
+      final check = checkGeofences(geo, control.geofences);
+      if (!check.inside) {
+        final where = check.nearest?.name.isNotEmpty == true
+            ? check.nearest!.name
+            : 'your assigned location';
+        final distance = check.distanceToEdgeM != null
+            ? ' You are about ${formatDistance(check.distanceToEdgeM!)} away from $where.'
+            : '';
+        return _block(PunchHint(
+          title: 'Outside allowed location',
+          message: 'Move inside $where to $action.$distance',
+        ));
+      }
+      // GPS is mandatory here, so the "continue without GPS" prompt does not apply.
+      locationPrompt = null;
+    }
+
+    if (control.nfcRequired && control.nfcCards.isEmpty) {
+      return _block(PunchHint(
+        title: 'No NFC card assigned',
+        message:
+            'You need to tap an NFC card to $action, but no card is assigned to you. Contact HR.',
+      ));
+    }
+
+    state = state.copyWith(
+      isAcquiringLocation: false,
+      isAwaitingNfc: control.nfcRequired,
+      locationPrompt: locationPrompt,
     );
 
-    // Punch continues even without GPS (geo may be null).
+    return PunchPreparation(
+      isCheckingOut: isCheckingOut,
+      geo: geo,
+      requiresNfc: control.nfcRequired,
+      nfcCards: control.nfcCards,
+    );
+  }
+
+  /// User closed the NFC sheet without tapping a valid card.
+  void cancelPunch() {
+    state = state.copyWith(
+      isAwaitingNfc: false,
+      infoMessage: 'Punch cancelled — no NFC card tapped',
+    );
+  }
+
+  /// Second half of a punch: send it (with the tapped card when NFC is required).
+  Future<void> submitPunch(
+    PunchPreparation preparation, {
+    String? nfcSerial,
+  }) async {
+    state = state.copyWith(isAwaitingNfc: false);
+    if (preparation.requiresNfc && nfcSerial == null) return;
+
+    final request = AttendanceCheckInRequest(
+      timeZone: _timeZone,
+      checkinTime: DateTime.now().toUtc().toIso8601String(),
+      geo: preparation.geo,
+      nfcSerial: nfcSerial == null ? null : normalizeNfcSerial(nfcSerial),
+    );
+
+    // Without geofence rules the punch continues even without GPS (geo may be null).
     await _submitAttendanceRequest(
       request: request,
-      isCheckingOut: isCheckingOut,
+      isCheckingOut: preparation.isCheckingOut,
     );
   }
 

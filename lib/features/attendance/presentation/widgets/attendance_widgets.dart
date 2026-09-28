@@ -433,6 +433,7 @@ class FloatingPunchButton extends StatelessWidget {
     required this.roleAllowsCheckIn,
     required this.isInteractionBlocked,
     this.blockedMessage,
+    this.showProgressSnack = true,
     required this.onPressed,
   });
 
@@ -441,6 +442,9 @@ class FloatingPunchButton extends StatelessWidget {
   final bool roleAllowsCheckIn;
   final bool isInteractionBlocked;
   final String? blockedMessage;
+
+  /// Off when attendance-control rules apply: the NFC sheet / hint dialog speaks instead.
+  final bool showProgressSnack;
   final VoidCallback onPressed;
 
   void _handleTap(BuildContext context) {
@@ -464,12 +468,14 @@ class FloatingPunchButton extends StatelessWidget {
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(isCheckedIn ? 'Checking out…' : 'Checking in…'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    if (showProgressSnack) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(isCheckedIn ? 'Checking out…' : 'Checking in…'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
     onPressed();
   }
 

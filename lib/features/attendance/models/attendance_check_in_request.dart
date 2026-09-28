@@ -5,11 +5,15 @@ class AttendanceCheckInRequest {
     required this.timeZone,
     required this.checkinTime,
     this.geo,
+    this.nfcSerial,
   });
 
   final String timeZone;
   final String checkinTime;
   final CheckInGeo? geo;
+
+  /// Normalized UID of the NFC card tapped for this punch (when NFC is required).
+  final String? nfcSerial;
 }
 
 class QueuedCheckInResponse {

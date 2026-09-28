@@ -22,12 +22,16 @@ class AttendanceCheckInOutcome {
     this.legacyData,
     this.retryable = false,
     this.planBSkippedReason,
+    this.userMessage,
   });
 
   final AttendanceCheckInOutcomeKind kind;
   final Map<String, dynamic>? legacyData;
   final bool retryable;
   final PlanBSkippedReason? planBSkippedReason;
+
+  /// Server explanation for a rejected punch (e.g. outside geofence).
+  final String? userMessage;
 
   factory AttendanceCheckInOutcome.primaryLegacySuccess(
     Map<String, dynamic> data,
@@ -48,11 +52,13 @@ class AttendanceCheckInOutcome {
   factory AttendanceCheckInOutcome.failed({
     required bool retryable,
     PlanBSkippedReason? planBSkippedReason,
+    String? userMessage,
   }) =>
       AttendanceCheckInOutcome._(
         kind: AttendanceCheckInOutcomeKind.failed,
         retryable: retryable,
         planBSkippedReason: planBSkippedReason,
+        userMessage: userMessage,
       );
 }
 
@@ -85,7 +91,10 @@ class AttendanceCheckInService {
       throw FormatException('Unexpected primary result');
     } catch (primaryError) {
       if (!isPlanBEligibleError(primaryError)) {
-        return AttendanceCheckInOutcome.failed(retryable: false);
+        return AttendanceCheckInOutcome.failed(
+          retryable: false,
+          userMessage: attendanceControlRejection(primaryError),
+        );
       }
 
       final skip = _planBSkipReason(accessToken);

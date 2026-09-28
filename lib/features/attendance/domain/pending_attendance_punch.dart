@@ -21,6 +21,7 @@ class PendingAttendancePunch {
     this.longitude,
     this.accuracy,
     this.locationCapturedAt,
+    this.nfcSerial,
     this.lastAttemptAt,
     this.lastError,
     this.baselineStatus,
@@ -34,6 +35,7 @@ class PendingAttendancePunch {
   final double? longitude;
   final double? accuracy;
   final String? locationCapturedAt;
+  final String? nfcSerial;
   final PendingAttendancePunchStatus status;
   final PendingAttendancePunchAction expectedAction;
   final int attempts;
@@ -58,6 +60,7 @@ class PendingAttendancePunch {
       longitude: longitude,
       accuracy: accuracy,
       locationCapturedAt: locationCapturedAt,
+      nfcSerial: nfcSerial,
       status: status ?? this.status,
       expectedAction: expectedAction,
       attempts: attempts ?? this.attempts,
@@ -77,6 +80,7 @@ class PendingAttendancePunch {
         'longitude': longitude,
         'accuracy': accuracy,
         'locationCapturedAt': locationCapturedAt,
+        'nfcSerial': nfcSerial,
         'status': status.name,
         'expectedAction':
             expectedAction == PendingAttendancePunchAction.checkOut ? 'check_out' : 'check_in',
@@ -131,6 +135,7 @@ class PendingAttendancePunch {
       longitude: (p['longitude'] as num?)?.toDouble(),
       accuracy: (p['accuracy'] as num?)?.toDouble(),
       locationCapturedAt: p['locationCapturedAt']?.toString(),
+      nfcSerial: p['nfcSerial']?.toString(),
       status: status,
       expectedAction: expectedAction,
       attempts: p['attempts'] is int ? p['attempts'] as int : 0,
@@ -198,6 +203,7 @@ PendingAttendancePunch buildPendingPunchFromInput(
     ),
     checkinTime: input.checkinTime,
     timeZone: input.timeZone,
+    nfcSerial: input.nfcSerial,
     status: PendingAttendancePunchStatus.pending,
     expectedAction: meta.expectedAction,
     attempts: 0,
@@ -215,6 +221,7 @@ PendingAttendancePunch buildPendingPunchFromInput(
       longitude: input.geo!.longitude,
       accuracy: input.geo!.accuracyMeters,
       locationCapturedAt: input.geo!.capturedAtIso,
+      nfcSerial: punch.nfcSerial,
       status: punch.status,
       expectedAction: punch.expectedAction,
       attempts: punch.attempts,
@@ -230,6 +237,7 @@ AttendanceCheckInRequest punchToAttendanceRequest(PendingAttendancePunch punch) 
     checkinTime: punch.checkinTime,
     timeZone: punch.timeZone,
     geo: pendingPunchToGeo(punch),
+    nfcSerial: punch.nfcSerial,
   );
 }
 

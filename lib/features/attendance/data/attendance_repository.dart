@@ -33,6 +33,9 @@ class AttendanceRepository {
     if (input.geo != null) {
       params.addAll(input.geo!.toQueryParams());
     }
+    if (input.nfcSerial != null) {
+      params['nfc_serial'] = input.nfcSerial;
+    }
 
     final response = await _api.get(
       ApiEndpoints.checkIn,
@@ -73,6 +76,9 @@ class AttendanceRepository {
       body['longitude'] = input.geo!.longitude;
       body['accuracy'] = input.geo!.accuracyMeters;
       body['locationCapturedAt'] = input.geo!.capturedAtIso;
+    }
+    if (input.nfcSerial != null) {
+      body['nfc_serial'] = input.nfcSerial;
     }
 
     final dio = Dio(
