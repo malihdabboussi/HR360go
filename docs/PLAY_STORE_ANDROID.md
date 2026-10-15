@@ -106,9 +106,10 @@ Play Console being “ready” is not enough until the listing and policies are 
 2. First AAB upload: Google Play App Signing stays on by default — Google holds the **app signing** key; your `upload-keystore.jks` is the **upload** key.
 3. Store listing: title, short/full description, screenshots, feature graphic (1024×500), app icon (512×512).
 4. Privacy policy URL (required for apps that use location / account data).
-5. Data safety form: declare **location** (attendance check-in), app activity / identifiers as applicable; internet; no unused notification permission after the plugin removal.
+5. Data safety form: declare **location** (attendance check-in), app activity / identifiers as applicable; internet; notifications are used for check-out reminders (see 8).
 6. Content rating questionnaire, target audience, news apps / COVID / etc. declarations as prompted.
 7. Location permission: Play may ask for a video or description — attendance geolocation is the justification (see manifest comment).
+8. **Background location (`ACCESS_BACKGROUND_LOCATION`, added 2026-10-15 for shift watch)**: Play requires the *Location permissions declaration* form plus a short video. Justification: "When the employer enables automatic check-out, HR360 Go monitors the employee's assigned work locations only while they are checked in, so it can notify them and check them out when they leave. Monitoring stops at check-out." The app asks for "Allow all the time" only when the company turned the feature on. Also update the Data safety form: location collected in the background (attendance), and notifications (`POST_NOTIFICATIONS`) are now used for check-out reminders.
 
 ## Regenerating launcher icons
 

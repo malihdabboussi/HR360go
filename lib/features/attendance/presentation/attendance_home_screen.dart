@@ -17,6 +17,7 @@ import '../models/my_attendance_report.dart';
 import 'attendance_controller.dart';
 import 'widgets/attendance_widgets.dart';
 import 'widgets/nfc_scan_sheet.dart';
+import 'widgets/shift_watch_widgets.dart';
 
 class AttendanceHomeScreen extends ConsumerWidget {
   const AttendanceHomeScreen({super.key});
@@ -121,124 +122,131 @@ class AttendanceHomeScreen extends ConsumerWidget {
     final themeMode = ref.watch(themeModeProvider);
     final control = ref.watch(attendanceControlProvider).valueOrNull;
 
-    ref.listen<AttendanceState>(scopedAttendanceControllerProvider, (prev, next) {
+    ref.listen<AttendanceState>(scopedAttendanceControllerProvider,
+        (prev, next) {
       final prompt = next.locationPrompt;
       if (prompt == null || prompt.ok) return;
       if (prev?.locationPrompt?.blockReason == prompt.blockReason) return;
       _showLocationPrompt(context, controller, prompt);
     });
 
-    ref.listen<AttendanceState>(scopedAttendanceControllerProvider, (prev, next) {
+    ref.listen<AttendanceState>(scopedAttendanceControllerProvider,
+        (prev, next) {
       final hint = next.punchHint;
       if (hint == null || identical(prev?.punchHint, hint)) return;
       _showPunchHint(context, controller, hint);
     });
 
-    return RefreshIndicator(
-      onRefresh: () async {
-        await Future.wait([
-          controller.refresh(),
-          ref
-              .read(attendanceControlProvider.notifier)
-              .refresh()
-              .then((_) {}, onError: (_) {}),
-        ]);
-      },
-      color: AppColors.primary,
-      child: CustomScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                AppTheme.spaceMd,
-                AppTheme.spaceSm,
-                AppTheme.spaceMd,
-                ShellLayout.homeScrollBottomPadding(context),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _HomeHeader(
-                    state: state,
-                    firstName: session.firstName.isNotEmpty
-                        ? session.firstName
-                        : session.displayName.split(' ').first,
-                    avatarUrl: session.avatar,
-                    themeMode: themeMode,
-                    onThemeChanged: (mode) {
-                      ref.read(themeModeProvider.notifier).state = mode;
-                    },
-                    onCheckUpdates: () async {
-                      final service = ref.read(appUpdateServiceProvider);
-                      final result = await service.checkForUpdates();
-                      if (!context.mounted) return;
-                      await showAppUpdateDialog(
-                        context,
-                        result: result,
-                        service: service,
-                        userInitiated: true,
-                      );
-                    },
-                    onLogout: () async {
-                      await ref.read(authRepositoryProvider).logout();
-                      ref.invalidate(sessionProvider);
-                      if (context.mounted) context.go('/');
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  _HeroCard(
-                    state: state,
-                    today: today,
-                    roleAllowsCheckIn: canCheckIn,
-                    isLoading: state.isLoading ||
-                        state.isAcquiringLocation ||
-                        state.isSubmitting,
-                    isAcquiringLocation: state.isAcquiringLocation,
-                    control: control,
-                    onToggle: state.isCheckInInteractionBlocked ||
-                            (!state.canToggleCheckIn && state.isOpenSession)
-                        ? null
-                        : () => _punch(context, ref),
-                  ),
-                  if (state.infoMessage != null) ...[
-                    const SizedBox(height: 12),
-                    _MessageBanner(
-                      message: state.infoMessage!,
-                      color: AppColors.primary,
+    return ShiftWatchTapListener(
+      onCheckOutNow: () => _punch(context, ref),
+      child: RefreshIndicator(
+        onRefresh: () async {
+          await Future.wait([
+            controller.refresh(),
+            ref
+                .read(attendanceControlProvider.notifier)
+                .refresh()
+                .then((_) {}, onError: (_) {}),
+          ]);
+        },
+        color: AppColors.primary,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  AppTheme.spaceMd,
+                  AppTheme.spaceSm,
+                  AppTheme.spaceMd,
+                  ShellLayout.homeScrollBottomPadding(context),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _HomeHeader(
+                      state: state,
+                      firstName: session.firstName.isNotEmpty
+                          ? session.firstName
+                          : session.displayName.split(' ').first,
+                      avatarUrl: session.avatar,
+                      themeMode: themeMode,
+                      onThemeChanged: (mode) {
+                        ref.read(themeModeProvider.notifier).state = mode;
+                      },
+                      onCheckUpdates: () async {
+                        final service = ref.read(appUpdateServiceProvider);
+                        final result = await service.checkForUpdates();
+                        if (!context.mounted) return;
+                        await showAppUpdateDialog(
+                          context,
+                          result: result,
+                          service: service,
+                          userInitiated: true,
+                        );
+                      },
+                      onLogout: () async {
+                        await ref.read(authRepositoryProvider).logout();
+                        ref.invalidate(sessionProvider);
+                        if (context.mounted) context.go('/');
+                      },
                     ),
-                  ],
-                  if (state.isResolvingQueued) ...[
                     const SizedBox(height: 12),
-                    _MessageBanner(
-                      message: 'Syncing attendance with server…',
-                      color: AppColors.primary,
+                    _HeroCard(
+                      state: state,
+                      today: today,
+                      roleAllowsCheckIn: canCheckIn,
+                      isLoading: state.isLoading ||
+                          state.isAcquiringLocation ||
+                          state.isSubmitting,
+                      isAcquiringLocation: state.isAcquiringLocation,
+                      control: control,
+                      onToggle: state.isCheckInInteractionBlocked ||
+                              (!state.canToggleCheckIn && state.isOpenSession)
+                          ? null
+                          : () => _punch(context, ref),
                     ),
+                    if (state.infoMessage != null) ...[
+                      const SizedBox(height: 12),
+                      _MessageBanner(
+                        message: state.infoMessage!,
+                        color: AppColors.primary,
+                      ),
+                    ],
+                    if (state.isResolvingQueued) ...[
+                      const SizedBox(height: 12),
+                      _MessageBanner(
+                        message: 'Syncing attendance with server…',
+                        color: AppColors.primary,
+                      ),
+                    ],
+                    if (state.error != null ||
+                        (state.hasPendingPunch &&
+                            !state.isResolvingQueued)) ...[
+                      const SizedBox(height: 12),
+                      _SyncStatusBanner(
+                        error: state.error,
+                        pendingFailed: state.pendingPunchFailed,
+                        hasPending: state.hasPendingPunch,
+                        onRetry: state.pendingPunchFailed
+                            ? controller.retryPendingPunch
+                            : null,
+                        onDismiss: state.hasPendingPunch
+                            ? controller.dismissPendingPunch
+                            : null,
+                      ),
+                    ],
+                    if (state.isOpenSession) const ShiftWatchPermissionBanner(),
+                    if (report != null) ...[
+                      const SizedBox(height: 16),
+                      WeekAtAGlance(report: report, today: today),
+                    ],
                   ],
-                  if (state.error != null ||
-                      (state.hasPendingPunch && !state.isResolvingQueued)) ...[
-                    const SizedBox(height: 12),
-                    _SyncStatusBanner(
-                      error: state.error,
-                      pendingFailed: state.pendingPunchFailed,
-                      hasPending: state.hasPendingPunch,
-                      onRetry: state.pendingPunchFailed
-                          ? controller.retryPendingPunch
-                          : null,
-                      onDismiss: state.hasPendingPunch
-                          ? controller.dismissPendingPunch
-                          : null,
-                    ),
-                  ],
-                  if (report != null) ...[
-                    const SizedBox(height: 16),
-                    WeekAtAGlance(report: report, today: today),
-                  ],
-                ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -290,12 +298,14 @@ class _HomeHeader extends StatelessWidget {
             ),
             if (state.hasPendingPunch)
               ListTile(
-                leading: const Icon(Icons.cloud_upload, color: AppColors.primary),
+                leading:
+                    const Icon(Icons.cloud_upload, color: AppColors.primary),
                 title: const Text('Attendance pending sync'),
               ),
             if (state.error != null)
               ListTile(
-                leading: const Icon(Icons.error_outline, color: AppColors.danger),
+                leading:
+                    const Icon(Icons.error_outline, color: AppColors.danger),
                 title: Text(state.error!),
               ),
             if (state.hasPendingPunch == false && state.error == null)
@@ -540,7 +550,9 @@ class _HeroCard extends StatelessWidget {
             children: [
               StatusPill(
                 label: isIn ? 'Checked in' : 'Checked out',
-                color: isIn ? const Color(0xFF22C55E) : AppDecorations.muted(context),
+                color: isIn
+                    ? const Color(0xFF22C55E)
+                    : AppDecorations.muted(context),
                 icon: isIn ? Icons.circle : Icons.circle_outlined,
               ),
               if (isIn) ...[

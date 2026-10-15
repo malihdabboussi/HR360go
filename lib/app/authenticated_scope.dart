@@ -77,6 +77,16 @@ final scopedAttendanceControllerProvider =
       locationService: ref.watch(locationServiceProvider),
       checkInService: ref.watch(attendanceCheckInServiceProvider),
       loadControlConfig: () => ref.read(attendanceControlProvider.notifier).forPunch(),
+      onShiftStatus: (isOpen) async {
+        final session = ref.read(currentSessionProvider);
+        final config = await ref.read(attendanceControlProvider.notifier).refresh();
+        final status = await ref.read(shiftWatchServiceProvider).sync(
+              isOpen: isOpen,
+              config: config,
+              timeZone: session.timeZone,
+            );
+        ref.read(shiftWatchStatusProvider.notifier).state = status;
+      },
     );
   },
   dependencies: [currentSessionProvider, attendanceControlProvider],

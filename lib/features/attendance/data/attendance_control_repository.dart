@@ -37,9 +37,15 @@ class AttendanceControlRepository {
   Future<AttendanceControlConfig> fetchMine({
     required String tenantId,
     required String employeeId,
+    String? timeZone,
   }) async {
     try {
-      final response = await _api.get(ApiEndpoints.myAttendanceControl);
+      final response = await _api.get(
+        ApiEndpoints.myAttendanceControl,
+        queryParameters: {
+          if (timeZone != null && timeZone.isNotEmpty) 'timeZone': timeZone,
+        },
+      );
       final config = AttendanceControlConfig.fromJson(response.data);
       await (await _openBox())?.put(_cacheKey(tenantId, employeeId), config.toJson());
       return config;

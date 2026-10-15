@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import '../models/check_in_geo.dart';
+import 'shift_watch.dart';
 
 /// Extra meters allowed beyond a geofence radius for GPS noise; capped so a
 /// very poor fix cannot stretch the fence arbitrarily. Server applies the same rule.
@@ -76,6 +77,7 @@ class AttendanceControlConfig {
     this.geofenceRequired = false,
     this.nfcCards = const [],
     this.geofences = const [],
+    this.shiftWatch = ShiftWatchConfig.none,
   });
 
   static const none = AttendanceControlConfig();
@@ -83,7 +85,11 @@ class AttendanceControlConfig {
   final bool nfcRequired;
   final bool geofenceRequired;
   final List<AttendanceNfcCard> nfcCards;
+
+  /// Assigned locations. Also sent when only auto check-out is on, so punches
+  /// check them only when [geofenceRequired].
   final List<AttendanceGeofence> geofences;
+  final ShiftWatchConfig shiftWatch;
 
   bool get hasRules => nfcRequired || geofenceRequired;
 
@@ -109,6 +115,7 @@ class AttendanceControlConfig {
           .map(AttendanceGeofence.tryParse)
           .whereType<AttendanceGeofence>()
           .toList(),
+      shiftWatch: ShiftWatchConfig.fromJson(map['shift_watch']),
     );
   }
 
@@ -117,6 +124,7 @@ class AttendanceControlConfig {
         'geofence_required': geofenceRequired,
         'nfc_cards': nfcCards.map((c) => c.toJson()).toList(),
         'geofences': geofences.map((g) => g.toJson()).toList(),
+        'shift_watch': shiftWatch.toJson(),
       };
 
   AttendanceNfcCard? cardForSerial(String serial) {

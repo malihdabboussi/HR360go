@@ -9,6 +9,7 @@ import 'app/hr360_go_app.dart';
 import 'app/providers.dart';
 import 'features/attendance/data/local_attendance_session_store.dart';
 import 'features/attendance/data/pending_punch_store.dart';
+import 'features/attendance/data/shift_watch_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,9 @@ Future<void> main() async {
 
   final localSessionStore = LocalAttendanceSessionStore();
   await localSessionStore.init();
+
+  // Check-out reminders / auto check-out alerts (on-phone notifications).
+  await initShiftWatchNotifications();
 
   runApp(
     ProviderScope(

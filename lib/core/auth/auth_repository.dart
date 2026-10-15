@@ -7,6 +7,7 @@ import '../permissions/permissions_repository.dart';
 import 'aes_crypto.dart';
 import 'employee_session.dart';
 import 'session_store.dart';
+import '../../features/attendance/data/shift_watch_service.dart';
 
 class MobileAccessDeniedException implements Exception {
   MobileAccessDeniedException([
@@ -112,5 +113,11 @@ class AuthRepository {
     return hydrated;
   }
 
-  Future<void> logout() => _sessionStore.clear();
+  Future<void> logout() async {
+    // Stop watching work locations / reminders for the signed-out employee.
+    try {
+      await ShiftWatchService(sessionStore: _sessionStore).stopAll();
+    } catch (_) {}
+    await _sessionStore.clear();
+  }
 }

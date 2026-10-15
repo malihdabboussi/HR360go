@@ -160,6 +160,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
     required LocationService locationService,
     required AttendanceCheckInService checkInService,
     required Future<AttendanceControlConfig> Function() loadControlConfig,
+    Future<void> Function(bool isOpen)? onShiftStatus,
   })  : _session = session,
         _repository = repository,
         _pendingPunchStore = pendingPunchStore,
@@ -167,6 +168,7 @@ class AttendanceController extends StateNotifier<AttendanceState> {
         _locationService = locationService,
         _checkInService = checkInService,
         _loadControlConfig = loadControlConfig,
+        _onShiftStatus = onShiftStatus,
         super(const AttendanceState()) {
     _startTimer();
     _syncPendingState();
@@ -180,6 +182,9 @@ class AttendanceController extends StateNotifier<AttendanceState> {
   final LocationService _locationService;
   final AttendanceCheckInService _checkInService;
   final Future<AttendanceControlConfig> Function() _loadControlConfig;
+
+  /// Shift watch (auto check-out / reminders) follows the server's open-shift state.
+  final Future<void> Function(bool isOpen)? _onShiftStatus;
 
   Timer? _ticker;
   DateTime? _checkinStart;
@@ -286,6 +291,10 @@ class AttendanceController extends StateNotifier<AttendanceState> {
         isLoading: false,
         lastSyncAt: DateTime.now(),
       );
+      final onShiftStatus = _onShiftStatus;
+      if (onShiftStatus != null) {
+        unawaited(onShiftStatus(status.isOpenSession).catchError((_) {}));
+      }
     } catch (e) {
       _restoreLocalAttendanceSessionUi();
       state = state.copyWith(

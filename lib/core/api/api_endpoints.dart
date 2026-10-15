@@ -15,6 +15,11 @@ class ApiEndpoints {
   static const myAttendance = '/api/v2/mobile/attendance/getMyAttendance';
   /// NFC / geofence rules resolved for the signed-in employee.
   static const myAttendanceControl = '/api/v2/mobile/attendance-control/me';
+
+  /// Shift watch: geofence exit / re-entry and "check me out at schedule end".
+  static const geofenceExit = '/api/v2/mobile/attendance/geofenceExit';
+  static const geofenceEnter = '/api/v2/mobile/attendance/geofenceEnter';
+  static const closeOpenShift = '/api/v2/mobile/attendance/closeOpenShift';
   static const currentMonthPayroll = '/api/v2/payroll/myPeriodAttendanceSummary';
 
   static const myLeaveRequests = '/api/v2/leave_request/getEmployeeLeavesRequest';

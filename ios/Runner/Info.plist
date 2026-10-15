@@ -37,7 +37,7 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>HR360 Go uses your location to record where you check in and check out.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>HR360 Go uses your location to record where you check in and check out.</string>
+	<string>HR360 Go uses your location to record where you check in and check out. If your company turns on automatic check-out, it also notices when you leave your work location while checked in, even when the app is closed.</string>
 	<key>NFCReaderUsageDescription</key>
 	<string>HR360 Go reads your company NFC card to confirm your check-in and check-out.</string>
 	<key>UIApplicationSceneManifest</key>

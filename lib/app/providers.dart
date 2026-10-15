@@ -14,6 +14,7 @@ import '../features/attendance/data/local_attendance_session_store.dart';
 import '../features/attendance/data/location_service.dart';
 import '../features/attendance/data/nfc_reader.dart';
 import '../features/attendance/data/pending_punch_store.dart';
+import '../features/attendance/data/shift_watch_service.dart';
 import '../features/attendance/domain/attendance_checkin_service.dart';
 import '../features/employee/data/employee_repository.dart';
 
@@ -24,6 +25,14 @@ final savedCredentialsStoreProvider =
 
 final appUpdateServiceProvider =
     Provider<AppUpdateService>((ref) => AppUpdateService());
+
+final shiftWatchServiceProvider = Provider<ShiftWatchService>((ref) {
+  return ShiftWatchService(sessionStore: ref.watch(sessionStoreProvider));
+});
+
+/// Auto check-out / reminder state for the attendance screen.
+final shiftWatchStatusProvider =
+    StateProvider<ShiftWatchStatus>((ref) => ShiftWatchStatus.idle);
 
 final apiClientProvider = Provider<ApiClient>((ref) {
   return ApiClient(ref.watch(sessionStoreProvider));

@@ -54,6 +54,7 @@ class AttendanceControlNotifier
       final config = await _repository.fetchMine(
         tenantId: _session.tenantId,
         employeeId: _session.employeeId,
+        timeZone: _session.timeZone,
       );
       if (mounted) state = AsyncValue.data(config);
       return config;
