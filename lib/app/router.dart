@@ -8,6 +8,8 @@ import '../features/employee/presentation/payroll_screen.dart';
 import '../features/employee/presentation/profile_screen.dart';
 import '../features/employee/presentation/tasks_screen.dart';
 import '../features/employee/presentation/training_screen.dart';
+import '../core/subscription/plan_gate.dart';
+import '../core/subscription/plan_modules.dart';
 import 'authenticated_scope.dart';
 import 'main_shell.dart';
 import 'providers.dart';
@@ -35,20 +37,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/workspace/leaves',
-        builder: (_, __) => const AuthenticatedScope(child: LeavesScreen()),
+        builder: (_, __) => const AuthenticatedScope(child: PlanGate(module: PlanModuleKeys.leave, featureName: 'Leaves', child: LeavesScreen())),
       ),
       GoRoute(
         path: '/workspace/tasks',
-        builder: (_, __) => const AuthenticatedScope(child: TasksScreen()),
+        builder: (_, __) => const AuthenticatedScope(child: PlanGate(module: PlanModuleKeys.tasks, featureName: 'Tasks', child: TasksScreen())),
       ),
       GoRoute(
         path: '/workspace/training',
         builder: (_, __) =>
-            const AuthenticatedScope(child: TrainingScreen()),
+            const AuthenticatedScope(child: PlanGate(module: PlanModuleKeys.training, featureName: 'Training', child: TrainingScreen())),
       ),
       GoRoute(
         path: '/workspace/payroll',
-        builder: (_, __) => const AuthenticatedScope(child: PayrollScreen()),
+        builder: (_, __) => const AuthenticatedScope(child: PlanGate(module: PlanModuleKeys.payroll, featureName: 'Payroll', child: PayrollScreen())),
       ),
     ],
   );

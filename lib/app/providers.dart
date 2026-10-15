@@ -1,10 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/api/api_client.dart';
+import '../core/api/api_endpoints.dart';
 import '../core/auth/auth_repository.dart';
 import '../core/auth/employee_session.dart';
 import '../core/auth/saved_credentials_store.dart';
 import '../core/auth/session_store.dart';
+import '../core/subscription/plan_modules.dart';
 import '../core/updates/app_update_service.dart';
 import '../features/attendance/data/attendance_control_repository.dart';
 import '../features/attendance/data/attendance_repository.dart';
@@ -68,4 +70,17 @@ final nfcReaderProvider = Provider<NfcReader>((ref) => const PlatformNfcReader()
 
 final employeeRepositoryProvider = Provider<EmployeeRepository>((ref) {
   return EmployeeRepository(ref.watch(apiClientProvider));
+});
+
+/// The company's plan modules, read once per session. Unreadable → nothing hidden
+/// (the server still enforces the plan).
+final planModulesProvider = FutureProvider<PlanModules>((ref) async {
+  final session = await ref.watch(sessionProvider.future);
+  if (session == null) return const PlanModules.unrestricted();
+  try {
+    final response = await ref.watch(apiClientProvider).get(ApiEndpoints.mobileEntitlements);
+    return PlanModules.fromJson(response.data);
+  } catch (_) {
+    return const PlanModules.unrestricted();
+  }
 });

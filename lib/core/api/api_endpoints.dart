@@ -6,6 +6,9 @@ class ApiEndpoints {
   static const permissionsMe = '/api/v2/permissions/me';
   static const permissionsMeDetailed = '/api/v2/permissions/me/detailed';
 
+  /// Modules the company's plan includes (System Admin subscriptions).
+  static const mobileEntitlements = '/api/v2/mobile/entitlements';
+
   /// Mobile-only attendance (gated by mobile-check-in / mobile-access).
   static const checkIn = '/api/v2/mobile/attendance/Checkin';
   static const checkInStatus = '/api/v2/mobile/attendance/GetCheckinStatus';

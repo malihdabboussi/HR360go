@@ -1,7 +1,21 @@
+import 'package:dio/dio.dart';
+
 /// Maps Dio / HTTP failures to short user-facing copy.
 String formatAttendanceUserError(Object error) {
   final raw = error.toString();
   final lower = raw.toLowerCase();
+
+  // Refusals from the company's plan (System Admin) come with a code in the body.
+  if (error is DioException) {
+    final data = error.response?.data;
+    final code = data is Map ? '${data['error'] ?? ''}' : '';
+    if (code == 'SUBSCRIPTION_FEATURE_NOT_AVAILABLE') {
+      return "This feature isn't part of your company's HR360 plan.";
+    }
+    if (code == 'tenant_subscription_suspended') {
+      return "Your organization's HR360 subscription is suspended. Contact your administrator.";
+    }
+  }
 
   if (lower.contains('403') ||
       lower.contains('permission_denied') ||

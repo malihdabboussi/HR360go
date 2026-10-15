@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_colors.dart';
 import '../core/theme/app_decorations.dart';
 import '../features/attendance/presentation/attendance_home_screen.dart';
 import '../features/attendance/presentation/my_time_screen.dart';
+import '../core/subscription/not_in_plan_view.dart';
+import '../core/subscription/plan_modules.dart';
+import 'providers.dart';
 
-class MainShell extends StatefulWidget {
+class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
 
   @override
-  State<MainShell> createState() => _MainShellState();
+  ConsumerState<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends ConsumerState<MainShell> {
   int _index = 0;
 
   static const _tabs = [
@@ -22,6 +26,19 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
+    // Check-in and My time are the Attendance module; without it the app explains
+    // that instead of showing screens the server would refuse.
+    final plan = ref.watch(planModulesProvider);
+    if (plan.isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    final modules = plan.valueOrNull ?? const PlanModules.unrestricted();
+    if (!modules.has(PlanModuleKeys.attendance)) {
+      return const Scaffold(
+        body: SafeArea(child: NotInPlanView(featureName: 'Attendance (check-in)')),
+      );
+    }
+
     final bottom = MediaQuery.paddingOf(context).bottom;
     if (_index >= _tabs.length) {
       _index = 0;

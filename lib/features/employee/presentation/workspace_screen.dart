@@ -7,6 +7,7 @@ import '../../../app/providers.dart';
 import '../../../app/theme_mode_provider.dart';
 import '../../../core/layout/shell_layout.dart';
 import '../../../core/permissions/mobile_permission_map.dart';
+import '../../../core/subscription/plan_modules.dart';
 
 class WorkspaceScreen extends ConsumerWidget {
   const WorkspaceScreen({super.key});
@@ -14,20 +15,25 @@ class WorkspaceScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(currentSessionProvider);
+    // Role permissions decide what a person may open; the company plan decides
+    // which modules exist at all.
+    final plan = ref.watch(planModulesProvider).valueOrNull ??
+        const PlanModules.unrestricted();
 
     final items = <_NavItem>[
       if (session.canReadModule(MobilePermissionMap.profile))
         _NavItem('Profile', Icons.person, '/workspace/profile'),
-      if (session.canViewMyAttendance)
+      if (session.canViewMyAttendance && plan.has(PlanModuleKeys.attendance))
         _NavItem('My time', Icons.schedule, '/home'),
-      if (session.canReadModule(MobilePermissionMap.leaves))
+      if (session.canReadModule(MobilePermissionMap.leaves) && plan.has(PlanModuleKeys.leave))
         _NavItem('Leaves', Icons.beach_access, '/workspace/leaves'),
-      if (session.canReadModule(MobilePermissionMap.tasks))
+      if (session.canReadModule(MobilePermissionMap.tasks) && plan.has(PlanModuleKeys.tasks))
         _NavItem('Tasks', Icons.task_alt, '/workspace/tasks'),
-      if (session.canReadModule(MobilePermissionMap.training))
+      if (session.canReadModule(MobilePermissionMap.training) && plan.has(PlanModuleKeys.training))
         _NavItem('Training', Icons.school, '/workspace/training'),
-      if (session.canReadModule(MobilePermissionMap.salaryHistory) ||
-          session.canReadModule(MobilePermissionMap.expenses))
+      if ((session.canReadModule(MobilePermissionMap.salaryHistory) ||
+              session.canReadModule(MobilePermissionMap.expenses)) &&
+          plan.has(PlanModuleKeys.payroll))
         _NavItem('Payroll', Icons.payments, '/workspace/payroll'),
     ];
 
