@@ -54,6 +54,11 @@ class WorkspaceScreen extends ConsumerWidget {
               ref.read(themeModeProvider.notifier).state = mode,
         ),
         const SizedBox(height: 12),
+        if (items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Text('Nothing else is available for your role yet. Contact HR if you need access.'),
+          ),
         ...items.map(
           (item) => Card(
             child: ListTile(
