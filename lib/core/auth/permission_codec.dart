@@ -97,4 +97,12 @@ class PermissionCodec {
     String moduleKey,
   ) =>
       permissions[moduleKey]?['read'] == true;
+
+  /// `add` / `edit` / `delete` bit of a module (same bits as the web role editor).
+  static bool can(
+    Map<String, Map<String, bool>> permissions,
+    String moduleKey,
+    String action,
+  ) =>
+      permissions[moduleKey]?[action] == true;
 }

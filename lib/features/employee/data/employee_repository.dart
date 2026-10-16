@@ -14,17 +14,6 @@ class EmployeeRepository {
     return null;
   }
 
-  Future<List<dynamic>> getMyLeaveRequests() async {
-    final response = await _api.get(ApiEndpoints.myLeaveRequests);
-    if (response.data is List) return response.data as List<dynamic>;
-    return [];
-  }
-
-  Future<dynamic> getMyLeaveBalance() async {
-    final response = await _api.get(ApiEndpoints.myLeaveBalance);
-    return response.data;
-  }
-
   Future<List<dynamic>> getMyTasks({bool limit = false}) async {
     final path = limit
         ? '${ApiEndpoints.myTasks}?limit=5'

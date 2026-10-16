@@ -46,6 +46,10 @@ class EmployeeSession {
   bool canReadModule(String permissionKey) =>
       PermissionCodec.canRead(permissions, permissionKey);
 
+  /// `add` / `edit` / `delete` on a module, e.g. `can('my-leaves', 'add')`.
+  bool can(String permissionKey, String action) =>
+      PermissionCodec.can(permissions, permissionKey, action);
+
   /// Mobile punch — gated by `mobile-check-in` / `actions.mobile.check-in`.
   bool get canRemoteCheckIn => evaluateCanMobileCheckIn(
         permissions: permissions,

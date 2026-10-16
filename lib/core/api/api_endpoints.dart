@@ -25,6 +25,9 @@ class ApiEndpoints {
   static const myLeaveRequests = '/api/v2/leave_request/getEmployeeLeavesRequest';
   static const myLeaveBalance = '/api/v2/leave_request/MyLeaveBalance';
   static const leaveRequest = '/api/v2/leave_request/LeaveRequest';
+  static const assignedLeaves = '/api/v2/leave_request/getAssignedLeaves';
+  static const computeLeaveDuration = '/api/v2/leave_request/computeLeaveDuration';
+  static const deleteLeaveRequest = '/api/v2/leave_request/deleteLeavesRequest';
 
   static const myTasks = '/api/v2/Task/getAllTasks';
   static String taskById(String id) => '/api/v2/Task/getTask?id=$id';

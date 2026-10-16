@@ -17,6 +17,7 @@ import '../features/attendance/data/pending_punch_store.dart';
 import '../features/attendance/data/shift_watch_service.dart';
 import '../features/attendance/domain/attendance_checkin_service.dart';
 import '../features/employee/data/employee_repository.dart';
+import '../features/leaves/data/leave_repository.dart';
 
 final sessionStoreProvider = Provider<SessionStore>((ref) => SessionStore());
 
@@ -76,6 +77,10 @@ final attendanceControlRepositoryProvider =
 });
 
 final nfcReaderProvider = Provider<NfcReader>((ref) => const PlatformNfcReader());
+
+final leaveRepositoryProvider = Provider<LeaveRepository>((ref) {
+  return LeaveRepository(ref.watch(apiClientProvider));
+});
 
 final employeeRepositoryProvider = Provider<EmployeeRepository>((ref) {
   return EmployeeRepository(ref.watch(apiClientProvider));

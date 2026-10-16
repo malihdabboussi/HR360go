@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/auth/presentation/login_screen.dart';
-import '../features/employee/presentation/leaves_screen.dart';
+import '../features/leaves/presentation/leaves_screen.dart';
 import '../features/employee/presentation/payroll_screen.dart';
 import '../features/employee/presentation/profile_screen.dart';
 import '../features/employee/presentation/tasks_screen.dart';
