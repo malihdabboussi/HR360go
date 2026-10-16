@@ -25,6 +25,43 @@ class ShiftWatchTapListener extends ConsumerStatefulWidget {
 }
 
 class _ShiftWatchTapListenerState extends ConsumerState<ShiftWatchTapListener> {
+  bool _disclosureOpen = false;
+
+  /// Google Play prominent disclosure, shown before the system "All the time" prompt.
+  Future<void> _showDisclosure() async {
+    if (_disclosureOpen || !mounted) return;
+    _disclosureOpen = true;
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.location_on_outlined, size: 32),
+        title: const Text(shiftWatchDisclosureTitle),
+        content: const Text(shiftWatchDisclosureText),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('No thanks'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    _disclosureOpen = false;
+    if (!mounted) return;
+    final service = ref.read(shiftWatchServiceProvider);
+    if (accepted == true) {
+      await service.acceptDisclosure();
+    } else {
+      service.declineDisclosure();
+    }
+    // Re-sync: asks for "All the time" after accepting, shows the banner after declining.
+    await ref.read(scopedAttendanceControllerProvider.notifier).refresh();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -47,7 +84,14 @@ class _ShiftWatchTapListenerState extends ConsumerState<ShiftWatchTapListener> {
   }
 
   @override
-  Widget build(BuildContext context) => widget.child;
+  Widget build(BuildContext context) {
+    ref.listen<ShiftWatchStatus>(shiftWatchStatusProvider, (prev, next) {
+      if (next == ShiftWatchStatus.needsDisclosure && prev != next) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => _showDisclosure());
+      }
+    });
+    return widget.child;
+  }
 }
 
 Future<void> showForgotCheckoutSheet(

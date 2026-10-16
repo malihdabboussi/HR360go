@@ -21,6 +21,7 @@ const _exitNotificationId = 7002;
 const shiftWatchReminderPayload = 'shift_watch.checkout_reminder';
 
 const _ctxKey = 'shift_watch_ctx';
+const _disclosureKey = 'shift_watch_disclosure';
 const _pendingKey = 'shift_watch_pending';
 
 const _channel = AndroidNotificationDetails(
@@ -48,9 +49,22 @@ enum ShiftWatchStatus {
   /// Watching the locations and/or a reminder is scheduled.
   active,
 
+  /// Company wants auto check-out; the employee has not seen the background
+  /// location explanation yet (Google Play: prominent disclosure before asking).
+  needsDisclosure,
+
   /// Company wants auto check-out but location is not allowed "All the time".
   needsAlwaysLocation,
 }
+
+/// Prominent disclosure shown before asking for background location (Play policy).
+const shiftWatchDisclosureTitle = 'Use your location in the background?';
+const shiftWatchDisclosureText =
+    'HR360 Go collects location data to check you out automatically when you leave '
+    'your work location, even when the app is closed or not in use. This only happens '
+    'while you are checked in and your company has turned on automatic check-out. '
+    'Location monitoring stops when you check out and is not used for anything else.\n\n'
+    'On the next screen, choose "Allow all the time".';
 
 bool _notificationsReady = false;
 
@@ -105,6 +119,7 @@ class ShiftWatchService {
   String? _lastGeofenceSignature;
   bool _askedNotificationPermission = false;
   bool _askedAlwaysLocation = false;
+  bool _disclosureDeclined = false;
 
   /// Called after each attendance status refresh (startup, punches, pull-to-refresh).
   Future<ShiftWatchStatus> sync({
@@ -130,6 +145,16 @@ class ShiftWatchService {
 
     var status = reminderAt != null ? ShiftWatchStatus.active : ShiftWatchStatus.idle;
     if (shouldWatchGeofences(watch, isOpen: isOpen, fenceCount: config.geofences.length)) {
+      if (!await _hasAlwaysLocation()) {
+        // Never ask for background location before the employee read why (Play policy).
+        final accepted = await _storage.read(key: _disclosureKey) == 'accepted';
+        if (!accepted) {
+          await _stopGeofences();
+          return _disclosureDeclined
+              ? ShiftWatchStatus.needsAlwaysLocation
+              : ShiftWatchStatus.needsDisclosure;
+        }
+      }
       final allowed = await _ensureAlwaysLocation();
       if (!allowed) {
         await _stopGeofences();
@@ -180,6 +205,24 @@ class ShiftWatchService {
       debugPrint('[shift-watch] reminder not scheduled: $e');
     }
   }
+
+  Future<bool> _hasAlwaysLocation() async {
+    try {
+      return await Geolocator.checkPermission() == LocationPermission.always;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Employee accepted the disclosure: the next [sync] asks for "All the time".
+  Future<void> acceptDisclosure() async {
+    _disclosureDeclined = false;
+    _askedAlwaysLocation = false;
+    await _storage.write(key: _disclosureKey, value: 'accepted');
+  }
+
+  /// Employee declined: do not ask again in this app run (a banner explains).
+  void declineDisclosure() => _disclosureDeclined = true;
 
   /// Asks for "Allow all the time" once per app run; true when granted.
   Future<bool> _ensureAlwaysLocation() async {

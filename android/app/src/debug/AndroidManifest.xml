@@ -4,4 +4,6 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Debug builds only: allow http:// to a local API on the Mac (release stays https-only). -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>
