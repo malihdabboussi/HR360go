@@ -91,4 +91,30 @@ void main() {
       );
     });
   });
+
+  group('pending exit', () {
+    test('parsed from /me and kept in the cache', () {
+      final config = AttendanceControlConfig.fromJson({
+        'shift_watch': {
+          'auto_checkout_on_exit': true,
+          'pending_exit_at': '2026-10-15T12:00:00.000Z',
+          'checkout_due_at': '2026-10-15T12:10:00.000Z',
+          'pending_exit_place': 'Head office',
+        },
+      });
+      expect(config.shiftWatch.pendingExitAt, DateTime.utc(2026, 10, 15, 12));
+      expect(config.shiftWatch.pendingExitPlace, 'Head office');
+      expect(AttendanceControlConfig.fromJson(config.toJson()).shiftWatch.checkoutDueAt,
+          DateTime.utc(2026, 10, 15, 12, 10));
+    });
+
+    test('prompt text names the place and both times', () {
+      final exit = DateTime(2026, 10, 15, 14, 5);
+      expect(
+        exitPromptText(place: 'Head office', exitAt: exit, dueAt: exit.add(const Duration(minutes: 10))),
+        'You left Head office at 14:05. You will be checked out automatically at 14:15 unless you come back.',
+      );
+      expect(exitPromptText(exitAt: exit), contains('your work location at 14:05'));
+    });
+  });
 }

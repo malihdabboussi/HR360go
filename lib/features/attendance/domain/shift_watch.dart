@@ -14,6 +14,9 @@ class ShiftWatchConfig {
     this.openAttendanceId,
     this.shiftEndAt,
     this.reminderAt,
+    this.pendingExitAt,
+    this.checkoutDueAt,
+    this.pendingExitPlace,
   });
 
   static const none = ShiftWatchConfig();
@@ -28,6 +31,12 @@ class ShiftWatchConfig {
   final DateTime? shiftEndAt;
   final DateTime? reminderAt;
 
+  /// Left the location; the Server checks out at [checkoutDueAt] unless the
+  /// employee comes back (or taps "Check out now").
+  final DateTime? pendingExitAt;
+  final DateTime? checkoutDueAt;
+  final String? pendingExitPlace;
+
   bool get enabled => autoCheckoutOnExit || reminderEnabled;
 
   factory ShiftWatchConfig.fromJson(dynamic raw) {
@@ -41,6 +50,9 @@ class ShiftWatchConfig {
       openAttendanceId: _nonEmpty(map['open_attendance_id']),
       shiftEndAt: _toDate(map['shift_end_at']),
       reminderAt: _toDate(map['reminder_at']),
+      pendingExitAt: _toDate(map['pending_exit_at']),
+      checkoutDueAt: _toDate(map['checkout_due_at']),
+      pendingExitPlace: _nonEmpty(map['pending_exit_place']),
     );
   }
 
@@ -52,6 +64,9 @@ class ShiftWatchConfig {
         'open_attendance_id': openAttendanceId,
         'shift_end_at': shiftEndAt?.toUtc().toIso8601String(),
         'reminder_at': reminderAt?.toUtc().toIso8601String(),
+        'pending_exit_at': pendingExitAt?.toUtc().toIso8601String(),
+        'checkout_due_at': checkoutDueAt?.toUtc().toIso8601String(),
+        'pending_exit_place': pendingExitPlace,
       };
 }
 
@@ -95,6 +110,20 @@ String exitNotificationBody(String placeName, int graceMinutes) {
     return 'You left $place. You will be checked out automatically.';
   }
   return 'You left $place. You will be checked out in $graceMinutes min unless you come back.';
+}
+
+/// In-app prompt after leaving: "You left Head office at 14:05. You will be
+/// checked out automatically at 14:15 unless you come back."
+String exitPromptText({String? place, required DateTime exitAt, DateTime? dueAt}) {
+  final where = (place == null || place.trim().isEmpty) ? 'your work location' : place.trim();
+  final left = 'You left $where at ${_hhmmLocal(exitAt)}.';
+  if (dueAt == null) return '$left You will be checked out automatically unless you come back.';
+  return '$left You will be checked out automatically at ${_hhmmLocal(dueAt)} unless you come back.';
+}
+
+String _hhmmLocal(DateTime t) {
+  final l = t.toLocal();
+  return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
 }
 
 int _toInt(dynamic v, int fallback) {

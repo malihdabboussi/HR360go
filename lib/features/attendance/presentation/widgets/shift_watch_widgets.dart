@@ -6,9 +6,14 @@ import '../../../../app/authenticated_scope.dart';
 import '../../../../app/providers.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/shift_watch_service.dart';
+import '../../domain/attendance_control.dart';
+import '../../domain/shift_watch.dart';
 
-/// Opens the "Did you forget to check out?" sheet when the reminder
-/// notification is tapped (also when it launched the app).
+/// Shift-watch prompts on the attendance screen:
+/// - "Did you forget to check out?" when the reminder notification is tapped;
+/// - "You left … check out now / wait" when the exit notification is tapped, or
+///   whenever the app is open while an automatic check-out is pending;
+/// - the background-location explanation before asking for "All the time".
 class ShiftWatchTapListener extends ConsumerStatefulWidget {
   const ShiftWatchTapListener({
     super.key,
@@ -24,8 +29,13 @@ class ShiftWatchTapListener extends ConsumerStatefulWidget {
   ConsumerState<ShiftWatchTapListener> createState() => _ShiftWatchTapListenerState();
 }
 
-class _ShiftWatchTapListenerState extends ConsumerState<ShiftWatchTapListener> {
+class _ShiftWatchTapListenerState extends ConsumerState<ShiftWatchTapListener>
+    with WidgetsBindingObserver {
   bool _disclosureOpen = false;
+  bool _exitPromptOpen = false;
+
+  /// Pending exits already asked about (by exit time), so "Wait" is not asked again.
+  final Set<DateTime> _answeredExits = {};
 
   /// Google Play prominent disclosure, shown before the system "All the time" prompt.
   Future<void> _showDisclosure() async {
@@ -65,22 +75,96 @@ class _ShiftWatchTapListenerState extends ConsumerState<ShiftWatchTapListener> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     shiftWatchTapNotifier.addListener(_onTap);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onTap());
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     shiftWatchTapNotifier.removeListener(_onTap);
     super.dispose();
   }
 
-  void _onTap() {
-    if (!mounted || shiftWatchTapNotifier.value != shiftWatchReminderPayload) return;
+  /// Back in the app (e.g. after leaving work): reload, which shows a pending exit.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      ref.read(scopedAttendanceControllerProvider.notifier).refresh();
+    }
+  }
+
+  Future<void> _onTap() async {
+    if (!mounted) return;
+    final payload = shiftWatchTapNotifier.value;
+    if (payload == null) return;
     shiftWatchTapNotifier.value = null;
-    final open = ref.read(scopedAttendanceControllerProvider).isOpenSession;
-    if (!open) return; // Already checked out.
-    showForgotCheckoutSheet(context, ref, onCheckOutNow: widget.onCheckOutNow);
+    final controller = ref.read(scopedAttendanceControllerProvider.notifier);
+    switch (payload) {
+      case shiftWatchReminderPayload:
+        if (!ref.read(scopedAttendanceControllerProvider).isOpenSession) return; // Already out.
+        showForgotCheckoutSheet(context, ref, onCheckOutNow: widget.onCheckOutNow);
+      case shiftWatchExitPayload:
+        // Fresh state from the Server, then the prompt shows if the exit is still pending.
+        _answeredExits.clear();
+        await controller.refresh();
+      case shiftWatchRefreshSignal:
+        await controller.refresh();
+    }
+  }
+
+  void _maybeShowExitPrompt(AttendanceControlConfig? config) {
+    final watch = config?.shiftWatch;
+    final exitAt = watch?.pendingExitAt;
+    if (watch == null || exitAt == null || _exitPromptOpen || _answeredExits.contains(exitAt)) return;
+    if (!ref.read(scopedAttendanceControllerProvider).isOpenSession) return;
+    _answeredExits.add(exitAt);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _showExitPrompt(watch, exitAt));
+  }
+
+  Future<void> _showExitPrompt(ShiftWatchConfig watch, DateTime exitAt) async {
+    if (!mounted) return;
+    _exitPromptOpen = true;
+    final checkOut = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.directions_walk, size: 32),
+        title: const Text('You left your work location'),
+        content: Text(exitPromptText(
+          place: watch.pendingExitPlace,
+          exitAt: exitAt,
+          dueAt: watch.checkoutDueAt,
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Wait')),
+          FilledButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Check out now')),
+        ],
+      ),
+    );
+    _exitPromptOpen = false;
+    if (checkOut != true || !mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final res = await ref.read(shiftWatchServiceProvider).checkOutAtExit(
+            dio: ref.read(apiClientProvider).dio,
+            timeZone: ref.read(currentSessionProvider).timeZone,
+          );
+      final at = DateTime.tryParse('${res['checkout_at'] ?? ''}')?.toLocal();
+      messenger.showSnackBar(SnackBar(
+        content: Text(at == null
+            ? 'Checked out'
+            : 'Checked out at ${at.hour.toString().padLeft(2, '0')}:${at.minute.toString().padLeft(2, '0')}'),
+      ));
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      messenger.showSnackBar(SnackBar(
+        content: Text(data is Map && data['message'] != null
+            ? '${data['message']}'
+            : 'Could not check you out. Try again.'),
+      ));
+    }
+    await ref.read(scopedAttendanceControllerProvider.notifier).refresh();
   }
 
   @override
@@ -90,6 +174,10 @@ class _ShiftWatchTapListenerState extends ConsumerState<ShiftWatchTapListener> {
         WidgetsBinding.instance.addPostFrameCallback((_) => _showDisclosure());
       }
     });
+    ref.listen<AsyncValue<AttendanceControlConfig>>(
+      attendanceControlProvider,
+      (_, next) => _maybeShowExitPrompt(next.valueOrNull),
+    );
     return widget.child;
   }
 }

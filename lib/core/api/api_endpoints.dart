@@ -19,6 +19,7 @@ class ApiEndpoints {
   /// Shift watch: geofence exit / re-entry and "check me out at schedule end".
   static const geofenceExit = '/api/v2/mobile/attendance/geofenceExit';
   static const geofenceEnter = '/api/v2/mobile/attendance/geofenceEnter';
+  static const geofenceExitConfirm = '/api/v2/mobile/attendance/geofenceExitConfirm';
   static const closeOpenShift = '/api/v2/mobile/attendance/closeOpenShift';
   static const currentMonthPayroll = '/api/v2/payroll/myPeriodAttendanceSummary';
 

@@ -20,6 +20,16 @@ const _reminderNotificationId = 7001;
 const _exitNotificationId = 7002;
 const shiftWatchReminderPayload = 'shift_watch.checkout_reminder';
 
+/// Exit notification: tapping it opens the in-app prompt; its buttons act directly.
+const shiftWatchExitPayload = 'shift_watch.exit';
+const shiftWatchCheckoutNowAction = 'shift_watch.checkout_now';
+const shiftWatchWaitAction = 'shift_watch.wait';
+
+/// Pushed to [shiftWatchTapNotifier] when a notification button changed the shift
+/// while the app is open, so the screen refreshes.
+const shiftWatchRefreshSignal = 'shift_watch.refresh';
+const _exitCategoryId = 'shift_watch_exit';
+
 const _ctxKey = 'shift_watch_ctx';
 const _disclosureKey = 'shift_watch_disclosure';
 const _pendingKey = 'shift_watch_pending';
@@ -34,6 +44,26 @@ const _channel = AndroidNotificationDetails(
 const _details = NotificationDetails(
   android: _channel,
   iOS: DarwinNotificationDetails(presentAlert: true, presentSound: true),
+);
+
+/// "You left…" with "Check out now" / "Wait" buttons (iOS: category registered at init).
+const _exitDetails = NotificationDetails(
+  android: AndroidNotificationDetails(
+    'shift_watch',
+    'Attendance reminders',
+    channelDescription: 'Check-out reminders and automatic check-out alerts',
+    importance: Importance.high,
+    priority: Priority.high,
+    actions: <AndroidNotificationAction>[
+      AndroidNotificationAction(shiftWatchCheckoutNowAction, 'Check out now'),
+      AndroidNotificationAction(shiftWatchWaitAction, 'Wait'),
+    ],
+  ),
+  iOS: DarwinNotificationDetails(
+    presentAlert: true,
+    presentSound: true,
+    categoryIdentifier: _exitCategoryId,
+  ),
 );
 
 final FlutterLocalNotificationsPlugin _notifications = FlutterLocalNotificationsPlugin();
@@ -74,17 +104,34 @@ Future<void> initShiftWatchNotifications() async {
   try {
     tz_data.initializeTimeZones();
     await _notifications.initialize(
-      settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      settings: InitializationSettings(
+        android: const AndroidInitializationSettings('@mipmap/ic_launcher'),
         iOS: DarwinInitializationSettings(
           requestAlertPermission: false,
           requestBadgePermission: false,
           requestSoundPermission: false,
+          notificationCategories: [
+            DarwinNotificationCategory(
+              _exitCategoryId,
+              actions: [
+                DarwinNotificationAction.plain(shiftWatchCheckoutNowAction, 'Check out now'),
+                DarwinNotificationAction.plain(shiftWatchWaitAction, 'Wait'),
+              ],
+            ),
+          ],
         ),
       ),
-      onDidReceiveNotificationResponse: (response) {
-        shiftWatchTapNotifier.value = response.payload;
+      onDidReceiveNotificationResponse: (response) async {
+        if (response.actionId == shiftWatchCheckoutNowAction) {
+          await _checkOutNowFromNotification();
+          shiftWatchTapNotifier.value = shiftWatchRefreshSignal;
+        } else if (response.actionId == shiftWatchWaitAction) {
+          // Nothing to do: the Server checks out after the grace period.
+        } else {
+          shiftWatchTapNotifier.value = response.payload;
+        }
       },
+      onDidReceiveBackgroundNotificationResponse: shiftWatchNotificationActionInBackground,
     );
     final launch = await _notifications.getNotificationAppLaunchDetails();
     if (launch?.didNotificationLaunchApp == true) {
@@ -350,6 +397,24 @@ class ShiftWatchService {
     }
   }
 
+  /// "Check out now" from the in-app prompt after leaving: the Server closes the
+  /// shift at the time the employee left.
+  Future<Map<String, dynamic>> checkOutAtExit({required Dio dio, required String timeZone}) async {
+    final res = await dio.post<dynamic>(
+      ApiEndpoints.geofenceExitConfirm,
+      data: {'timeZone': timeZone},
+    );
+    await cancelExitNotification();
+    return res.data is Map ? Map<String, dynamic>.from(res.data as Map) : <String, dynamic>{};
+  }
+
+  Future<void> cancelExitNotification() async {
+    if (!_notificationsReady) return;
+    try {
+      await _notifications.cancel(id: _exitNotificationId);
+    } catch (_) {}
+  }
+
   /// "Check me out at my scheduled end" from the reminder sheet.
   Future<Map<String, dynamic>> closeAtScheduleEnd({
     required Dio dio,
@@ -456,7 +521,8 @@ Future<void> shiftWatchGeofenceCallback(GeofenceCallbackParams params) async {
           id: _exitNotificationId,
           title: 'You left your work location',
           body: exitNotificationBody(place, grace),
-          notificationDetails: _details,
+          notificationDetails: _exitDetails,
+          payload: shiftWatchExitPayload,
         );
       }
     } else if (params.event == GeofenceEvent.enter) {
@@ -475,4 +541,42 @@ Future<void> shiftWatchGeofenceCallback(GeofenceCallbackParams params) async {
   } catch (e) {
     debugPrint('[shift-watch] background event failed: $e');
   }
+}
+
+/// "Check out now" pressed on the exit notification: ask the Server to close the
+/// shift at the exit time, then tell the employee how it went.
+Future<void> _checkOutNowFromNotification() async {
+  const storage = FlutterSecureStorage();
+  try {
+    final rawCtx = await storage.read(key: _ctxKey);
+    final ctx = rawCtx == null ? <String, dynamic>{} : jsonDecode(rawCtx) as Map<String, dynamic>;
+    final apiBase = '${ctx['api_base'] ?? Env.apiBaseUrl}';
+    final res = await _postEvent(
+      SessionStore(),
+      apiBase: apiBase,
+      path: ApiEndpoints.geofenceExitConfirm,
+      body: {'timeZone': '${ctx['time_zone'] ?? ''}'},
+    );
+    final closed = res?['closed'] == true;
+    final at = DateTime.tryParse('${res?['checkout_at'] ?? ''}');
+    await _notifications.show(
+      id: _exitNotificationId,
+      title: closed ? 'Checked out' : 'Could not check you out',
+      body: closed
+          ? 'You were checked out at ${at == null ? 'the time you left' : _hhmm(at)}.'
+          : 'Open HR360 Go to check out.',
+      notificationDetails: _details,
+    );
+  } catch (e) {
+    debugPrint('[shift-watch] check out now failed: $e');
+  }
+}
+
+/// Notification button pressed while the app is in the background or closed
+/// (runs in its own isolate).
+@pragma('vm:entry-point')
+Future<void> shiftWatchNotificationActionInBackground(NotificationResponse response) async {
+  if (response.actionId != shiftWatchCheckoutNowAction) return;
+  await initShiftWatchNotifications();
+  await _checkOutNowFromNotification();
 }
