@@ -62,7 +62,9 @@ class _LeavesScreenState extends ConsumerState<LeavesScreen> {
     final sent = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         fullscreenDialog: true,
-        builder: (_) => const LeaveRequestFormScreen(),
+        builder: (_) => LeaveRequestFormScreen(
+          employeeId: ref.read(currentSessionProvider).employeeId,
+        ),
       ),
     );
     if (sent == true) {

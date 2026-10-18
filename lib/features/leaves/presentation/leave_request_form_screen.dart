@@ -4,7 +4,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../app/authenticated_scope.dart';
 import '../../../app/providers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../domain/leave_models.dart';
@@ -13,7 +12,11 @@ import '../domain/leave_models.dart';
 /// working days it will use (Server computeLeaveDuration) and the Server's
 /// message when a request is blocked (balance, probation…). Pops `true` when sent.
 class LeaveRequestFormScreen extends ConsumerStatefulWidget {
-  const LeaveRequestFormScreen({super.key});
+  const LeaveRequestFormScreen({super.key, required this.employeeId});
+
+  /// Passed in: this page is pushed on the root navigator, outside the
+  /// AuthenticatedScope that provides the session.
+  final String employeeId;
 
   @override
   ConsumerState<LeaveRequestFormScreen> createState() => _LeaveRequestFormScreenState();
@@ -98,9 +101,7 @@ class _LeaveRequestFormScreenState extends ConsumerState<LeaveRequestFormScreen>
     setState(() => _computing = true);
     double? days;
     try {
-      days = await ref
-          .read(leaveRepositoryProvider)
-          .computeDays(ref.read(currentSessionProvider).employeeId, _draft);
+      days = await ref.read(leaveRepositoryProvider).computeDays(widget.employeeId, _draft);
     } catch (_) {
       days = null;
     }
