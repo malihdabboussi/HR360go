@@ -38,7 +38,7 @@ while [[ $# -gt 0 ]]; do
     --bump) bump=true ;;
     --api) api="${2:?--api needs a URL}"; shift ;;
     --skip-tests) run_tests=false ;;
-    -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
     *) echo "Unknown option: $1 (see scripts/build.sh --help)"; exit 1 ;;
   esac
   shift
